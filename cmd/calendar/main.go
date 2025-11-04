@@ -39,12 +39,42 @@ func main() {
 			),
 		),
 	)
+	mux.Handle("/events_for_day",
+		middleware.NewMWLogger(log)(
+			middleware.RequestID(
+				http.HandlerFunc(handlers.NewEventsForDayHandler(log, service)),
+			),
+		),
+	)
+	mux.Handle("/events_for_month",
+		middleware.NewMWLogger(log)(
+			middleware.RequestID(
+				http.HandlerFunc(handlers.NewEventsForMonthHandler(log, service)),
+			),
+		),
+	)
+	mux.Handle("/events_for_week",
+		middleware.NewMWLogger(log)(
+			middleware.RequestID(
+				http.HandlerFunc(handlers.NewEventsForWeekHandler(log, service)),
+			),
+		),
+	)
+	mux.Handle("/delete_event",
+		middleware.NewMWLogger(log)(
+			middleware.RequestID(
+				http.HandlerFunc(handlers.NewDeleteEventHandler(log, service)),
+			),
+		),
+	)
+	mux.Handle("/update_event",
+		middleware.NewMWLogger(log)(
+			middleware.RequestID(
+				http.HandlerFunc(handlers.NewUpdateEventHandler(log, service)),
+			),
+		),
+	)
 
-	// http.HandleFunc("/delete_event", handlers.deleteEventHandler(service))
-	// http.HandleFunc("/update_event", handlers.updateEventHandler(service))
-	// http.HandleFunc("/events_for_day", handlers.eventsForDayHandler(service))
-	// http.HandleFunc("/events_for_week", handlers.eventsForWeekHandler(service))
-	// http.HandleFunc("/events_for_month", handlers.eventsForMonthHandler(service))
 
 	srv := &http.Server{
 		Addr:         cfg.Address,

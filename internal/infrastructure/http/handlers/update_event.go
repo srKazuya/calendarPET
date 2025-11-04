@@ -20,22 +20,20 @@ import (
 )
 
 
-func NewDeleteEventHandler(log *slog.Logger, svc event.Service) http.HandlerFunc {
-	
+func NewUpdateEventHandler(log *slog.Logger, svc event.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		
-		const op = "handlers.event.delete"
+		const op = "handlers.event.update"
 
 		log = log.With(
 			slog.String("op", op),
 			slog.String("request_id", middleware.GetRequestID(r)),
 		)
 
-		var req dto.DeleteEventRequest
+		var req dto.UpdateEventRequest
 
 		err := json.NewDecoder(r.Body).Decode(&req)
 		if errors.Is(err, io.EOF) {
@@ -43,7 +41,7 @@ func NewDeleteEventHandler(log *slog.Logger, svc event.Service) http.HandlerFunc
 				slog.String("type", request.ErrEmptyReqBody.Error()),
 				sl.Err(err),
 			)
-			deleteEventResponse(w, request.ErrEmptyReqBody.Error())
+			updateEventResponse(w, request.ErrEmptyReqBody.Error())
 			return
 		}
 		if err != nil {
@@ -51,7 +49,7 @@ func NewDeleteEventHandler(log *slog.Logger, svc event.Service) http.HandlerFunc
 				slog.String("type", request.ErrFailedToDecodeReqBody.Error()),
 				sl.Err(err),
 			)
-			deleteEventResponse(w,  request.ErrFailedToDecodeReqBody.Error())
+			updateEventResponse(w, request.ErrFailedToDecodeReqBody.Error())
 			return
 		}
 
@@ -64,7 +62,15 @@ func NewDeleteEventHandler(log *slog.Logger, svc event.Service) http.HandlerFunc
 			return
 		}
 
-		if err := svc.Delete(req.UUID); err != nil {
+		reqEvent := event.Event{
+			UUID:     req.UUID,
+			UserUUID: req.UserUUID,
+			Date:     req.Date,
+			Title:    req.Title,
+			Desc:     req.Desc,
+		}
+
+		if err := svc.Update(reqEvent); err != nil {
 			switch {
 			case errors.Is(err, inmem.ErrNoValue):
 				log.Error("failed to delete event", sl.Err(err))
@@ -75,22 +81,22 @@ func NewDeleteEventHandler(log *slog.Logger, svc event.Service) http.HandlerFunc
 			}
 		}
 
-		log.Info("event deleted", slog.Any("title", req.UUID))
+		log.Info("event update", slog.Any("title", req.UUID))
 
-		deleteEventResponseOK(w, req.UUID)
+		updateEventResponseOK(w, req.UUID)
 	}
 }
 
-func deleteEventResponseOK(w http.ResponseWriter, id uint64) {
-	r := dto.DeleteEventResponse{
+func updateEventResponseOK(w http.ResponseWriter, id uint64) {
+	r := dto.UpdateEventResponse{
 		ValidationResponse: valResp.OK(),
-		UUID:              id,
+		UUID:               id,
 	}
 	response.WriteJSON(w, http.StatusOK, r)
 }
 
-func deleteEventResponse(w http.ResponseWriter, e string) {
-	r := dto.DeleteEventResponse{
+func updateEventResponse(w http.ResponseWriter, e string) {
+	r := dto.UpdateEventResponse{
 		ValidationResponse: valResp.Error(e),
 	}
 	response.WriteJSON(w, http.StatusBadRequest, r)

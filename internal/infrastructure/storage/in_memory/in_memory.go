@@ -6,10 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 )
 
 var (
-	errNoValue = errors.New("нет значения: ")
+	ErrNoValue = errors.New("no value")
 )
 
 type Storage struct {
@@ -35,28 +36,6 @@ func (s *Storage) Add(e event.Event) error {
 
 	return nil
 }
-func (s *Storage) Get(id uint64) (event.Event, error) {
-	const op = "infra.storage.in_memory.get"
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if event, ok := s.db[id]; !ok {
-		return event, fmt.Errorf("%s: error: %w, %v", op, errNoValue, id)
-	} else {
-		return event, nil
-	}
-
-}
-func (s *Storage) Delete(id uint64) error {
-	const op = "infra.storage.in_memory.delete"
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, ok := s.db[id]; !ok {
-		return fmt.Errorf("%s: error: %w, %v", op, errNoValue, id)
-	}
-
-	delete(s.db, id)
-	return nil
-}
 
 func (s *Storage) Update(e event.Event) error {
 	const op = "infra.storage.in_memory.update"
@@ -64,22 +43,69 @@ func (s *Storage) Update(e event.Event) error {
 	defer s.mu.Unlock()
 
 	if _, ok := s.db[e.UUID]; !ok {
-		return fmt.Errorf("%s: error: %w, %v", op, errNoValue, e.UUID)
+		return fmt.Errorf("%s: error: %w, %v", op, ErrNoValue, e.UUID)
 	} else {
 		s.db[e.UUID] = e
 	}
 	return nil
 }
 
-func (s *Storage) List() ([]event.Event, error) {
-	const op = "infra.storage.in_memory.list"
+func (s *Storage) Delete(id uint64) error {
+	const op = "infra.storage.in_memory.delete"
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	result := make([]event.Event, 0, len(s.db))
-	for _, event := range s.db {
-		result = append(result, event)
+	if _, ok := s.db[id]; !ok {
+		return fmt.Errorf("%s: error: %w, %v", op, ErrNoValue, id)
 	}
 
+	delete(s.db, id)
+	return nil
+}
+
+func (s *Storage) ListByDay(t time.Time) ([]event.Event, error) {
+	const op = "infra.storage.in_memory.list_by_day"
+	result := []event.Event{}
+	if len(s.db) == 0 {
+		return nil, fmt.Errorf("%s: error: %w", op, ErrNoValue)
+	}
+	y, m, d := t.Date()
+	for _, event := range s.db {
+		y1, m1, d1 := event.Date.Date()
+		if y == y1 && m == m1 && d == d1 {
+			result = append(result, event)
+		}
+	}
+	return result, nil
+}
+
+func (s *Storage) ListByWeek(t time.Time) ([]event.Event, error) {
+	const op = "infra.storage.in_memory.list_by_week"
+	result := []event.Event{}
+	if len(s.db) == 0 {
+		return nil, fmt.Errorf("%s: error: %w", op, ErrNoValue)
+	}
+	y, w := t.ISOWeek()
+	for _, event := range s.db {
+		y1, w1 := event.Date.ISOWeek()
+		if y == y1 && w == w1 {
+			result = append(result, event)
+		}
+	}
+	return result, nil
+}
+
+func (s *Storage) ListByMonth(t time.Time) ([]event.Event, error) {
+	const op = "infra.storage.in_memory.list_by_month"
+	result := []event.Event{}
+	if len(s.db) == 0 {
+		return nil, fmt.Errorf("%s: error: %w", op, ErrNoValue)
+	}
+	y, m, _ := t.Date()
+	for _, event := range s.db {
+		y1, m1, _ := event.Date.Date()
+		if y == y1 && m == m1 {
+			result = append(result, event)
+		}
+	}
 	return result, nil
 }

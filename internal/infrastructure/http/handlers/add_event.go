@@ -7,6 +7,7 @@ import (
 	"calendar/internal/infrastructure/http/middleware"
 	"calendar/internal/infrastructure/http/request"
 	"calendar/internal/infrastructure/http/response"
+	inmem "calendar/internal/infrastructure/storage/in_memory"
 	"calendar/pkg/sl_logger/sl"
 	valResp "calendar/pkg/validator"
 
@@ -19,7 +20,7 @@ import (
 	"github.com/go-playground/validator"
 )
 
-// NewAddEventHandler создает новый обработчик для добавления события в календарь
+// NewAddEventHandler создает новый обработчик для добавления события в календарь POST
 // Принимает:
 //   - log *slog.Logger: логгер для записи информации о работе обработчика
 //   - svc event.Service: сервис для работы с событиями
@@ -29,7 +30,7 @@ import (
 func NewAddEventHandler(log *slog.Logger, svc event.Service) http.HandlerFunc {
 	// Возвращаем функцию-обработчик
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost{
+		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -49,14 +50,20 @@ func NewAddEventHandler(log *slog.Logger, svc event.Service) http.HandlerFunc {
 		err := json.NewDecoder(r.Body).Decode(&req)
 		// Проверяем, не пустое ли тело запроса
 		if errors.Is(err, io.EOF) {
-			log.Error("err", request.ErrEmptyReqBody, slog.Any("op", op))
-			response.WriteJSON(w, http.StatusBadRequest, valResp.Error("request body is empty"))
+			log.Error("bad request",
+				slog.String("type", request.ErrEmptyReqBody.Error()),
+				sl.Err(err),
+			)
+			addEventResponseErr(w, request.ErrEmptyReqBody.Error())
+			
 			return
 		}
-
 		if err != nil {
-			log.Error("failed to decode request body", slog.Any("op", op), sl.Err(err))
-			response.WriteJSON(w, http.StatusBadRequest, valResp.Error("failed to decode request body"))
+			log.Error("bad request",
+				slog.String("type", request.ErrFailedToDecodeReqBody.Error()),
+				sl.Err(err),
+			)
+			addEventResponseErr(w,  request.ErrFailedToDecodeReqBody.Error())
 			return
 		}
 
@@ -71,20 +78,28 @@ func NewAddEventHandler(log *slog.Logger, svc event.Service) http.HandlerFunc {
 		}
 
 		// Создаем объект события из данных запроса
-		e := event.Event{
+		respEvent := event.Event{
 			Date:  req.Date,
 			Title: req.Title,
 			Desc:  req.Desc,
 		}
 		// Добавляем событие через сервисный слой
-		if err := svc.Add(e); err != nil {
-			log.Error("failed to add event", slog.Any("op", op), sl.Err(err))
+		if err := svc.Add(respEvent); err != nil {
+			switch {
+			case errors.Is(err, inmem.ErrNoValue):
+				log.Error("failed to add event", sl.Err(err))
+				return
+			default:
+				log.Error("unexpected error adding event", sl.Err(err))
+				return
+			}
 		}
 
 		// Логируем успешное добавление события
-		log.Info("event added", slog.Any("title", e.Title))
+		log.Info("event added", slog.Any("title", respEvent.Title))
+
 		// Отправляем успешный ответ клиенту
-		responseOK(w, e.Title)
+		addEventResponseOK(w, respEvent.Title)
 	}
 }
 
@@ -92,9 +107,17 @@ func NewAddEventHandler(log *slog.Logger, svc event.Service) http.HandlerFunc {
 // Параметры:
 //   - w http.ResponseWriter: интерфейс для записи ответа
 //   - title string: заголовок добавленного события
-func responseOK(w http.ResponseWriter, title string) {
+func addEventResponseOK(w http.ResponseWriter, title string) {
 	r := dto.AddEventResponse{
-		Title: title,
+		ValidationResponse: valResp.OK(),
+		Title:              title,
 	}
 	response.WriteJSON(w, http.StatusOK, r)
+}
+
+func addEventResponseErr(w http.ResponseWriter, e string) {
+	r := dto.AddEventResponse{
+		ValidationResponse: valResp.Error(e),
+	}
+	response.WriteJSON(w, http.StatusBadRequest, r)
 }

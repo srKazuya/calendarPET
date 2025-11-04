@@ -1,12 +1,15 @@
 //Package event provides ...
 package event
 
+import "time"
 
 type Service interface {
 	Add(e Event) error
-	Get(id uint64) (Event, error)
-	Delete(id uint64) error
-	List() ([]Event, error)
+	Update(e Event) error
+	Delete(uuid uint64) error
+	ListByDay(t time.Time) ([]Event, error)
+	ListByWeek(t time.Time) ([]Event, error)
+	ListByMonth(t time.Time) ([]Event, error)
 }
 
 type service struct {
@@ -21,14 +24,22 @@ func (s *service) Add(e Event) error {
 	return s.storage.Add(e)
 }
 
-func (s *service) Get(id uint64) (Event, error) {
-	return s.storage.Get(id)
+func (s *service) Update(e Event) error {
+	return s.storage.Update(e)
 }
 
 func (s *service) Delete(id uint64) error {
 	return s.storage.Delete(id)
 }
 
-func (s *service) List() ([]Event, error) {
-	return s.storage.List()
+func (s *service) ListByDay(t time.Time) ([]Event, error) {
+	return s.storage.ListByDay(t)
+}
+
+func (s *service) ListByWeek(t time.Time) ([]Event, error) {
+	return s.storage.ListByWeek(t)
+}
+
+func (s *service) ListByMonth(t time.Time) ([]Event, error) {
+	return s.storage.ListByMonth(t)
 }
